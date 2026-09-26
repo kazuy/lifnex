@@ -13,9 +13,16 @@
 
 ### Review and commits
 
-- Leave changes unstaged for user review.
-- After the user stages approved changes, create an appropriate Conventional
-  Commit without requesting confirmation again.
+- When a task spans multiple proposed commit boundaries, implement only one
+  boundary at a time. After implementing and verifying that boundary, leave
+  its changes unstaged, present them for user review, and stop before starting
+  the next boundary.
+- Do not accumulate changes for later commit boundaries in the working tree.
+  When a file will be touched by multiple boundaries, change only the hunks
+  required by the current boundary so each review and commit remains atomic.
+- After the user approves and stages the current boundary, create an
+  appropriate Conventional Commit without requesting confirmation again.
+  Begin the next boundary only after that commit is complete.
 - Use Conventional Commit types such as `feat` and `chore` for commits, and
   use the same type names as branch-name prefixes.
 
