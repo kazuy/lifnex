@@ -38,7 +38,8 @@ mise install
 
 ```sh
 mise exec -- go -C app test ./...
-mise exec -- go -C app build ./cmd/lifnex
+mkdir -p app/bin
+mise exec -- go -C app build -o ./bin/lifnex ./cmd/lifnex
 ```
 
 Do not rely on a globally installed Go version or invoke `go` directly.
