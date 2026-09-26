@@ -8,3 +8,6 @@
 # Local environment
 .env
 .env.*
+
+# Build artifacts
+/app/bin/
