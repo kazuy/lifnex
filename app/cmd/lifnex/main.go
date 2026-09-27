@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-
-	"github.com/kazuy/lifnex/app/internal/server"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -17,9 +16,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	mcpServer := server.NewMCP()
-	if err := mcpServer.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		logger.Error("MCP server stopped", slog.Any("error", err))
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	options, err := loadTransportOptions()
+	if err != nil {
+		logger.Error(
+			"server configuration failed",
+			slog.String("component", "mcp"),
+			slog.Any("error", err),
+		)
+		os.Exit(1)
+	}
+
+	if err := run(ctx, logger, options); err != nil {
+		logger.Error(
+			"server stopped",
+			slog.String("component", "mcp"),
+			slog.String("transport", options.transport),
+			slog.Any("error", err),
+		)
 		os.Exit(1)
 	}
 }
