@@ -1,2 +1,3 @@
 project_id = "your-project-id"
 region     = "your-region"
+image_uri  = "your-image-uri"
