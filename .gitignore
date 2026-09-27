@@ -11,3 +11,11 @@
 
 # Build artifacts
 /app/bin/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan

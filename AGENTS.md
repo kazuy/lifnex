@@ -86,3 +86,20 @@ Do not rely on a globally installed Go version or invoke `go` directly.
 
 - Reserve `stdout` exclusively for MCP protocol messages when using stdio
   transport. Write application logs to `stderr`.
+
+## Terraform
+
+### Running commands
+
+Terraform is managed with mise. Run Terraform commands from the repository
+root through `mise exec` and use `-chdir=infra`.
+
+### Validation
+
+After changing Terraform configuration, run:
+
+```sh
+mise exec -- terraform -chdir=infra fmt -check -diff
+mise exec -- terraform -chdir=infra validate
+git diff --check
+```
