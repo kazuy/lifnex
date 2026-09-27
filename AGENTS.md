@@ -110,3 +110,11 @@ git diff --check
   configuration, and lifecycle behavior. Insert a single blank line when the
   concern changes, but do not add blank lines mechanically at the start or end
   of a block.
+
+### Safety
+
+- Review deletion behavior for every Terraform-managed resource. When
+  supported, explicitly protect resources whose deletion would remove
+  artifacts, identities, or running services with
+  `deletion_policy = "PREVENT"` or `deletion_protection = true`. Do not rely on
+  a provider's default deletion behavior without deliberate review.
