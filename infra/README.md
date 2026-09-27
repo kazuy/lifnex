@@ -17,14 +17,12 @@ flowchart LR
         AR["Artifact Registry"]
         SA["Cloud Run Service Account"]
         Run["Cloud Run Service"]
-        IAM["IAM Binding<br/>allUsers → roles/run.invoker"]
 
         APIs --> AR
         APIs --> SA
         APIs --> Run
         AR -->|"Container image"| Run
         SA -->|"Runtime identity"| Run
-        IAM -.->|"Attached to"| Run
     end
 
     Developer -->|"Terraform state"| State

@@ -4,6 +4,8 @@ resource "google_cloud_run_v2_service" "app" {
 
   ingress = "INGRESS_TRAFFIC_ALL"
 
+  invoker_iam_disabled = true
+
   deletion_protection = true
 
   template {
