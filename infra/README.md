@@ -39,12 +39,25 @@ Remote MCP clients connect directly to the standard Cloud Run HTTPS endpoint.
 
 ## Initial setup
 
+Run the following commands from this directory.
+
 Authenticate with Google Cloud Application Default Credentials, then initialize
 Terraform with the separately created state bucket:
 
 ```sh
 gcloud auth application-default login
 
-mise exec -- terraform -chdir=infra init \
-  -backend-config="bucket=<TFSTATE_BUCKET>"
+cp terraform.tfvars.example terraform.tfvars
+terraform init -backend-config="bucket=<TFSTATE_BUCKET>"
+```
+
+Replace the example values in `terraform.tfvars` for the target environment.
+
+## Apply changes
+
+Review the plan, then apply the changes:
+
+```sh
+terraform plan
+terraform apply
 ```
