@@ -103,3 +103,10 @@ mise exec -- terraform -chdir=infra fmt -check -diff
 mise exec -- terraform -chdir=infra validate
 git diff --check
 ```
+
+### Style
+
+- Group attributes by logical concern, such as iteration, resource identity,
+  configuration, and lifecycle behavior. Insert a single blank line when the
+  concern changes, but do not add blank lines mechanically at the start or end
+  of a block.
