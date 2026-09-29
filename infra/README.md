@@ -67,6 +67,14 @@ does not require a provider API key. See the
 [OpenAI MCP authentication guide](https://developers.openai.com/plugins/build/auth)
 for the protocol requirements represented in this diagram.
 
+Before deploying OAuth support, configure an external authorization server and
+set `oauth_issuer_url`, `oauth_jwks_url`, and `oauth_resource_url` in
+`terraform.tfvars`.
+
+Configure the authorization server to issue JWT access tokens whose `iss`
+matches `oauth_issuer_url` and whose audience matches `oauth_resource_url`.
+These values are compared exactly, including paths and trailing slashes.
+
 ## Initial setup
 
 Run the following commands from this directory.
