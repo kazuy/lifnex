@@ -32,6 +32,8 @@ var locationIDByName = map[string]int{
 	"オンライン": 11,
 }
 
+var kawasakiLocation = time.FixedZone("JST", 9*60*60)
+
 // EventClient retrieves event information from the Kawasaki City event API.
 type EventClient struct {
 	httpClient *http.Client
@@ -75,7 +77,7 @@ func (c *EventClient) Search(ctx context.Context, condition eventmodel.SearchCon
 
 	events := make([]eventmodel.Event, 0, len(payload.Events))
 	for _, source := range payload.Events {
-		event, err := convertEvent(source)
+		event, err := convertEvent(source, condition.From, condition.To)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -126,12 +128,18 @@ func convertLocationsToIDs(locations []string) ([]string, error) {
 	return ids, nil
 }
 
-func convertEvent(source eventResponse) (eventmodel.Event, error) {
+func convertEvent(source eventResponse, from, to time.Time) (eventmodel.Event, error) {
+	from = dateOnly(from)
+	to = dateOnly(to)
+
 	schedules := make([]eventmodel.Schedule, 0, len(source.Dates))
 	for _, sourceDate := range source.Dates {
-		date, err := time.Parse(dateLayout, sourceDate.Date)
+		date, err := time.ParseInLocation(dateLayout, sourceDate.Date, kawasakiLocation)
 		if err != nil {
 			return eventmodel.Event{}, fmt.Errorf("parse Kawasaki event date %q: %w", sourceDate.Date, err)
+		}
+		if date.Before(from) || date.After(to) {
+			continue
 		}
 		schedules = append(schedules, eventmodel.Schedule{
 			Date:      date,
@@ -162,6 +170,10 @@ func convertEvent(source eventResponse) (eventmodel.Event, error) {
 		Locations:   locations,
 		URL:         eventURL(source),
 	}, nil
+}
+
+func dateOnly(value time.Time) time.Time {
+	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, kawasakiLocation)
 }
 
 func eventURL(source eventResponse) string {

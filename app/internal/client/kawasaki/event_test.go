@@ -79,7 +79,7 @@ func TestEventClientSearch(t *testing.T) {
 			Description: "川崎で開催される音楽イベントです。",
 			Schedules: []eventmodel.Schedule{
 				{
-					Date:      time.Date(2026, time.October, 2, 0, 0, 0, 0, time.UTC),
+					Date:      time.Date(2026, time.October, 2, 0, 0, 0, 0, kawasakiLocation),
 					StartTime: "19:00:00",
 					EndTime:   "21:00:00",
 					Details:   "開場は18時30分",
@@ -123,6 +123,44 @@ func TestEventClientSearchUsesRelatedURLWhenOpenURLIsEmpty(t *testing.T) {
 
 	if events[0].URL != "https://example.com/related" {
 		t.Errorf("URL = %q, want %q", events[0].URL, "https://example.com/related")
+	}
+}
+
+func TestEventClientSearchLimitsSchedulesToRequestedDateRange(t *testing.T) {
+	t.Parallel()
+
+	server := newEventServer(t, http.StatusOK, `{
+		"total_numbers": 1,
+		"event_data": [{
+			"title": "Event",
+			"date_list": [
+				{"date": "2026-09-30"},
+				{"date": "2026-10-01"},
+				{"date": "2026-10-02"},
+				{"date": "2026-10-03"}
+			]
+		}]
+	}`)
+	condition := eventmodel.SearchCondition{
+		From: time.Date(2026, time.October, 1, 15, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+		To:   time.Date(2026, time.October, 2, 15, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+	}
+
+	events, _, err := eventClientForServer(server).Search(t.Context(), condition)
+	if err != nil {
+		t.Fatalf("search events: %v", err)
+	}
+
+	wantDates := []time.Time{
+		time.Date(2026, time.October, 1, 0, 0, 0, 0, kawasakiLocation),
+		time.Date(2026, time.October, 2, 0, 0, 0, 0, kawasakiLocation),
+	}
+	gotDates := make([]time.Time, 0, len(events[0].Schedules))
+	for _, schedule := range events[0].Schedules {
+		gotDates = append(gotDates, schedule.Date)
+	}
+	if !reflect.DeepEqual(gotDates, wantDates) {
+		t.Errorf("schedule dates = %v, want %v", gotDates, wantDates)
 	}
 }
 
