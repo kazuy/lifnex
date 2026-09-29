@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	oauth "github.com/kazuy/lifnex/app/internal/auth"
 	"github.com/kazuy/lifnex/app/internal/server"
 )
 
@@ -20,6 +21,7 @@ const (
 type transportOptions struct {
 	transport string
 	port      int
+	oauth     oauth.Config
 }
 
 func loadTransportOptions() (transportOptions, error) {
@@ -43,7 +45,25 @@ func loadTransportOptions() (transportOptions, error) {
 		port = parsed
 	}
 
-	return transportOptions{transport: transport, port: port}, nil
+	options := transportOptions{transport: transport, port: port}
+	if transport == httpTransport {
+		options.oauth = oauth.Config{
+			Issuer:   strings.TrimSpace(os.Getenv("OAUTH_ISSUER_URL")),
+			Audience: strings.TrimSpace(os.Getenv("OAUTH_RESOURCE_URL")),
+			JWKSURL:  strings.TrimSpace(os.Getenv("OAUTH_JWKS_URL")),
+		}
+		if options.oauth.Issuer == "" {
+			return transportOptions{}, fmt.Errorf("failed to validate OAUTH_ISSUER_URL: required for HTTP transport")
+		}
+		if options.oauth.Audience == "" {
+			return transportOptions{}, fmt.Errorf("failed to validate OAUTH_RESOURCE_URL: required for HTTP transport")
+		}
+		if options.oauth.JWKSURL == "" {
+			return transportOptions{}, fmt.Errorf("failed to validate OAUTH_JWKS_URL: required for HTTP transport")
+		}
+	}
+
+	return options, nil
 }
 
 func run(ctx context.Context, logger *slog.Logger, options transportOptions, dependencies server.Dependencies) error {
@@ -51,7 +71,16 @@ func run(ctx context.Context, logger *slog.Logger, options transportOptions, dep
 	case stdioTransport:
 		return server.RunStdio(ctx, dependencies)
 	case httpTransport:
-		return server.RunHTTP(ctx, logger, options.port, dependencies)
+		verifier, err := oauth.NewVerifier(ctx, options.oauth)
+		if err != nil {
+			return fmt.Errorf("failed to configure OAuth: %w", err)
+		}
+
+		return server.RunHTTP(ctx, logger, options.port, dependencies, server.OAuthConfig{
+			AuthorizationServerURL: options.oauth.Issuer,
+			ResourceURL:            options.oauth.Audience,
+			VerifyToken:            verifier.Verify,
+		})
 	default:
 		return fmt.Errorf("failed to run transport %q: unsupported value", options.transport)
 	}
