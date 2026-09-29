@@ -21,7 +21,7 @@ func TestRunHTTPReturnsBindErrorWithoutListeningLog(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&output, nil))
 
-	err = RunHTTP(t.Context(), logger, port)
+	err = RunHTTP(t.Context(), logger, port, testDependencies())
 	if err == nil {
 		t.Fatal("RunHTTP() error = nil, want non-nil")
 	}
@@ -38,7 +38,7 @@ func TestRunHTTPStopsWhenContextIsCanceled(t *testing.T) {
 	cancel()
 
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	if err := RunHTTP(ctx, logger, 0); err != nil {
+	if err := RunHTTP(ctx, logger, 0, testDependencies()); err != nil {
 		t.Fatalf("RunHTTP() error = %v, want nil", err)
 	}
 }

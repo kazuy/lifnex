@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	eventmodel "github.com/kazuy/lifnex/app/internal/model/event"
+	eventusecase "github.com/kazuy/lifnex/app/internal/usecase/event"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -15,7 +17,7 @@ func TestHTTPHealthEndpoint(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
-	newRouter().ServeHTTP(response, request)
+	newRouter(testDependencies()).ServeHTTP(response, request)
 
 	result := response.Result()
 	defer result.Body.Close()
@@ -38,7 +40,7 @@ func TestHTTPCrossOriginRequestIsRejected(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	request.Header.Set("Origin", "https://attacker.example")
 	response := httptest.NewRecorder()
-	newRouter().ServeHTTP(response, request)
+	newRouter(testDependencies()).ServeHTTP(response, request)
 
 	if response.Code != http.StatusForbidden {
 		t.Errorf("status = %d, want %d", response.Code, http.StatusForbidden)
@@ -48,7 +50,7 @@ func TestHTTPCrossOriginRequestIsRejected(t *testing.T) {
 func TestHTTPHelloTool(t *testing.T) {
 	t.Parallel()
 
-	httpServer := httptest.NewServer(newRouter())
+	httpServer := httptest.NewServer(newRouter(testDependencies()))
 	t.Cleanup(httpServer.Close)
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "lifnex-http-test", Version: "0.1.0"}, nil)
@@ -78,4 +80,16 @@ func TestHTTPHelloTool(t *testing.T) {
 	if text.Text != "Hello, world!" {
 		t.Errorf("text = %q, want %q", text.Text, "Hello, world!")
 	}
+}
+
+func testDependencies() Dependencies {
+	return Dependencies{
+		EventSearch: eventusecase.NewSearch(testEventProvider{}),
+	}
+}
+
+type testEventProvider struct{}
+
+func (testEventProvider) Search(context.Context, eventmodel.SearchCondition) ([]eventmodel.Event, int, error) {
+	return nil, 0, nil
 }

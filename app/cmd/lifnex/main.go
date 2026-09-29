@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/kazuy/lifnex/app/internal/server"
 )
 
 func main() {
@@ -29,7 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := run(ctx, logger, options); err != nil {
+	if err := run(ctx, logger, options, server.NewDependencies()); err != nil {
 		logger.Error(
 			"server stopped",
 			slog.String("component", "mcp"),

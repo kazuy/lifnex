@@ -11,7 +11,7 @@ const (
 )
 
 // NewMCP creates a Lifnex MCP server with all supported tools registered.
-func NewMCP() *mcp.Server {
+func NewMCP(dependencies Dependencies) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
@@ -21,6 +21,10 @@ func NewMCP() *mcp.Server {
 		Name:        "hello",
 		Description: "Return a hello-world greeting",
 	}, handler.Hello)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "search_events",
+		Description: "Search for Kawasaki City events by date range, title keyword, and location",
+	}, handler.NewSearchEvents(dependencies.EventSearch))
 
 	return server
 }
