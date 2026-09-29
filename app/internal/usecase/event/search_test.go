@@ -48,6 +48,73 @@ func TestSearchExecute(t *testing.T) {
 	}
 }
 
+func TestSearchExecuteAcceptsSameDayRange(t *testing.T) {
+	t.Parallel()
+
+	date := time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC)
+	condition := eventmodel.SearchCondition{From: date, To: date}
+	provider := &providerStub{}
+
+	_, err := eventusecase.NewSearch(provider).Execute(t.Context(), condition)
+	if err != nil {
+		t.Fatalf("execute search: %v", err)
+	}
+
+	if !provider.called {
+		t.Error("provider was not called")
+	}
+}
+
+func TestSearchExecuteRejectsInvalidDateRange(t *testing.T) {
+	t.Parallel()
+
+	date := time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		condition eventmodel.SearchCondition
+		wantErr   error
+	}{
+		{
+			name:    "missing both boundaries",
+			wantErr: eventusecase.ErrDateRangeRequired,
+		},
+		{
+			name:      "missing from",
+			condition: eventmodel.SearchCondition{To: date},
+			wantErr:   eventusecase.ErrDateRangeRequired,
+		},
+		{
+			name:      "missing to",
+			condition: eventmodel.SearchCondition{From: date},
+			wantErr:   eventusecase.ErrDateRangeRequired,
+		},
+		{
+			name: "from after to",
+			condition: eventmodel.SearchCondition{
+				From: date.AddDate(0, 0, 1),
+				To:   date,
+			},
+			wantErr: eventusecase.ErrInvalidDateRange,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &providerStub{}
+			_, err := eventusecase.NewSearch(provider).Execute(t.Context(), tt.condition)
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("execute search error = %v, want %v", err, tt.wantErr)
+			}
+			if provider.called {
+				t.Error("provider was called for an invalid condition")
+			}
+		})
+	}
+}
+
 func TestSearchExecuteSuggestsRefinementInsteadOfReturningTooManyResults(t *testing.T) {
 	t.Parallel()
 
@@ -60,7 +127,8 @@ func TestSearchExecuteSuggestsRefinementInsteadOfReturningTooManyResults(t *test
 		totalCount: 42,
 	}
 
-	result, err := eventusecase.NewSearch(provider).Execute(t.Context(), eventmodel.SearchCondition{})
+	date := time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC)
+	result, err := eventusecase.NewSearch(provider).Execute(t.Context(), eventmodel.SearchCondition{From: date, To: date})
 	if err != nil {
 		t.Fatalf("execute search: %v", err)
 	}
@@ -82,7 +150,8 @@ func TestSearchExecuteReturnsProviderError(t *testing.T) {
 	providerErr := errors.New("provider unavailable")
 	provider := &providerStub{err: providerErr}
 
-	_, err := eventusecase.NewSearch(provider).Execute(t.Context(), eventmodel.SearchCondition{})
+	date := time.Date(2026, time.October, 10, 0, 0, 0, 0, time.UTC)
+	_, err := eventusecase.NewSearch(provider).Execute(t.Context(), eventmodel.SearchCondition{From: date, To: date})
 	if !errors.Is(err, providerErr) {
 		t.Fatalf("execute search error = %v, want wrapped provider error", err)
 	}
@@ -93,9 +162,11 @@ type providerStub struct {
 	totalCount int
 	err        error
 	condition  eventmodel.SearchCondition
+	called     bool
 }
 
 func (p *providerStub) Search(_ context.Context, condition eventmodel.SearchCondition) ([]eventmodel.Event, int, error) {
+	p.called = true
 	p.condition = condition
 
 	return p.events, p.totalCount, p.err
