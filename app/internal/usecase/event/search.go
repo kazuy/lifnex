@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	maxSearchResults  = 30
-	refinementMessage = "More than 30 events matched. Narrow the search by date, location, or keyword."
+	maxSearchResults        = 30
+	refinementMessageFormat = "Showing the first %d of %d matching events. Narrow the search further to find more relevant events."
 )
 
 var (
@@ -52,9 +52,14 @@ func (s *Search) Execute(ctx context.Context, condition eventmodel.SearchConditi
 	}
 
 	if totalCount > maxSearchResults {
+		if len(events) > maxSearchResults {
+			events = events[:maxSearchResults]
+		}
+
 		return SearchResult{
+			Events:     events,
 			TotalCount: totalCount,
-			Message:    refinementMessage,
+			Message:    fmt.Sprintf(refinementMessageFormat, len(events), totalCount),
 		}, nil
 	}
 

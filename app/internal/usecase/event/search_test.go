@@ -3,6 +3,7 @@ package event_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -115,12 +116,12 @@ func TestSearchExecuteRejectsInvalidDateRange(t *testing.T) {
 	}
 }
 
-func TestSearchExecuteSuggestsRefinementInsteadOfReturningTooManyResults(t *testing.T) {
+func TestSearchExecuteReturnsLimitedResultsWithRefinementMessage(t *testing.T) {
 	t.Parallel()
 
-	events := make([]eventmodel.Event, 31)
+	events := make([]eventmodel.Event, 42)
 	for i := range events {
-		events[i].Title = "Event"
+		events[i].Title = fmt.Sprintf("Event %d", i+1)
 	}
 	provider := &providerStub{
 		events:     events,
@@ -133,14 +134,18 @@ func TestSearchExecuteSuggestsRefinementInsteadOfReturningTooManyResults(t *test
 		t.Fatalf("execute search: %v", err)
 	}
 
-	if len(result.Events) != 0 {
-		t.Errorf("event count = %d, want 0", len(result.Events))
+	if len(result.Events) != 30 {
+		t.Errorf("event count = %d, want 30", len(result.Events))
+	}
+	if result.Events[29].Title != "Event 30" {
+		t.Errorf("last event title = %q, want %q", result.Events[29].Title, "Event 30")
 	}
 	if result.TotalCount != 42 {
 		t.Errorf("total count = %d, want 42", result.TotalCount)
 	}
-	if result.Message == "" {
-		t.Error("message is empty, want refinement guidance")
+	wantMessage := "Showing the first 30 of 42 matching events. Narrow the search further to find more relevant events."
+	if result.Message != wantMessage {
+		t.Errorf("message = %q, want %q", result.Message, wantMessage)
 	}
 }
 
