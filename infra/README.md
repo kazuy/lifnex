@@ -4,8 +4,10 @@
 
 ```mermaid
 flowchart LR
+    User["User"]
     Client["ChatGPT / MCP Client"]
     Developer["Developer"]
+    AuthServer["External OAuth 2.1<br/>Authorization Server"]
 
     subgraph Existing["Pre-created resources"]
         Project["Google Cloud Project"]
@@ -16,7 +18,7 @@ flowchart LR
         APIs["Google Cloud APIs"]
         AR["Artifact Registry"]
         SA["Cloud Run Service Account"]
-        Run["Cloud Run Service"]
+        Run["Cloud Run / lifnex<br/>OAuth Resource Server"]
 
         APIs --> AR
         APIs --> SA
@@ -29,11 +31,41 @@ flowchart LR
     Developer -->|"Terraform apply"| APIs
     Developer -->|"Build and push image"| AR
     Project --- Terraform
-    Client -->|"HTTPS / MCP"| Run
+    User -->|"Use MCP tools"| Client
+    User -->|"Sign-in / consent"| AuthServer
+    Client -->|"OAuth discovery"| Run
+    Client -->|"Authorization + PKCE"| AuthServer
+    AuthServer -->|"Access token"| Client
+    Client -->|"HTTPS / MCP<br/>Bearer token"| Run
+    Run -->|"JWKS"| AuthServer
 ```
 
 The Google Cloud project and Terraform state bucket are created separately.
-Remote MCP clients connect directly to the standard Cloud Run HTTPS endpoint.
+The OAuth authorization server is external and is not hosted in the Google
+Cloud project or managed by this Terraform configuration. Remote MCP clients
+connect directly to the standard Cloud Run HTTPS endpoint.
+
+## OAuth authentication
+
+The MCP endpoint uses an external OAuth 2.1 authorization server.
+
+Each component has a separate responsibility:
+
+- ChatGPT is the OAuth client. It discovers the authorization server, guides
+  the user through sign-in, and sends the resulting access token with MCP
+  requests.
+- The external authorization server hosts the sign-in and consent flow and
+  issues signed access tokens. Lifnex does not implement these OAuth endpoints
+  itself.
+- Lifnex is the resource server. It publishes protected resource metadata and
+  accepts an MCP request only after verifying the token signature, issuer,
+  audience, and expiration against the authorization server's public keys.
+
+The authorization server is configured separately before OAuth support is
+deployed. Lifnex verifies JWT access tokens locally through public JWKS and
+does not require a provider API key. See the
+[OpenAI MCP authentication guide](https://developers.openai.com/plugins/build/auth)
+for the protocol requirements represented in this diagram.
 
 ## Initial setup
 
