@@ -10,7 +10,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
-const protectedResourceMetadataPath = "/.well-known/oauth-protected-resource"
+const (
+	mcpAccessScope                = "mcp:access"
+	protectedResourceMetadataPath = "/.well-known/oauth-protected-resource"
+)
 
 // OAuthConfig configures the HTTP transport as an OAuth protected resource.
 type OAuthConfig struct {
@@ -38,11 +41,13 @@ func newRouter(dependencies Dependencies, oauth OAuthConfig) (http.Handler, erro
 	)
 	requireBearerToken := auth.RequireBearerToken(oauth.VerifyToken, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: metadataURL,
+		Scopes:              []string{mcpAccessScope},
 	})
 	mux.Handle("/mcp", http.NewCrossOriginProtection().Handler(requireBearerToken(mcpHandler)))
 	mux.Handle(protectedResourceMetadataPath, auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
 		Resource:               oauth.ResourceURL,
 		AuthorizationServers:   []string{oauth.AuthorizationServerURL},
+		ScopesSupported:        []string{mcpAccessScope},
 		BearerMethodsSupported: []string{"header"},
 		ResourceName:           "lifnex",
 	}))

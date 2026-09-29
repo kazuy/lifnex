@@ -64,6 +64,9 @@ func TestHTTPProtectedResourceMetadata(t *testing.T) {
 	if len(metadata.AuthorizationServers) != 1 || metadata.AuthorizationServers[0] != testAuthorizationServerURL {
 		t.Errorf("authorization servers = %v, want [%s]", metadata.AuthorizationServers, testAuthorizationServerURL)
 	}
+	if len(metadata.ScopesSupported) != 1 || metadata.ScopesSupported[0] != mcpAccessScope {
+		t.Errorf("scopes = %v, want [%s]", metadata.ScopesSupported, mcpAccessScope)
+	}
 	if len(metadata.BearerMethodsSupported) != 1 || metadata.BearerMethodsSupported[0] != "header" {
 		t.Errorf("bearer methods = %v, want [header]", metadata.BearerMethodsSupported)
 	}
@@ -79,7 +82,24 @@ func TestHTTPMCPRequiresBearerToken(t *testing.T) {
 	if response.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
-	wantChallenge := `Bearer resource_metadata="https://resource-server.example/.well-known/oauth-protected-resource"`
+	wantChallenge := `Bearer resource_metadata="https://resource-server.example/.well-known/oauth-protected-resource", scope="mcp:access"`
+	if got := response.Header().Get("WWW-Authenticate"); got != wantChallenge {
+		t.Errorf("WWW-Authenticate = %q, want %q", got, wantChallenge)
+	}
+}
+
+func TestHTTPMCPRequiresAccessScope(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	request.Header.Set("Authorization", "Bearer missing-scope")
+	response := httptest.NewRecorder()
+	newTestRouter(t).ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	wantChallenge := `Bearer resource_metadata="https://resource-server.example/.well-known/oauth-protected-resource", scope="mcp:access"`
 	if got := response.Header().Get("WWW-Authenticate"); got != wantChallenge {
 		t.Errorf("WWW-Authenticate = %q, want %q", got, wantChallenge)
 	}
@@ -154,12 +174,17 @@ func testOAuthConfig() OAuthConfig {
 		AuthorizationServerURL: testAuthorizationServerURL,
 		ResourceURL:            testResourceURL,
 		VerifyToken: func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-			if token != "valid-token" {
+			if token != "valid-token" && token != "missing-scope" {
 				return nil, auth.ErrInvalidToken
+			}
+			scopes := []string{mcpAccessScope}
+			if token == "missing-scope" {
+				scopes = nil
 			}
 
 			return &auth.TokenInfo{
 				Expiration: time.Now().Add(time.Hour),
+				Scopes:     scopes,
 				UserID:     "user-123",
 			}, nil
 		},
