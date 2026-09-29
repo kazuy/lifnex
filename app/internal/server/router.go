@@ -6,10 +6,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func newRouter() http.Handler {
+func newRouter(dependencies Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mcpHandler := mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return NewMCP() },
+		func(*http.Request) *mcp.Server { return NewMCP(dependencies) },
 		&mcp.StreamableHTTPOptions{Stateless: true},
 	)
 	mux.Handle("/mcp", http.NewCrossOriginProtection().Handler(mcpHandler))

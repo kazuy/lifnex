@@ -46,12 +46,12 @@ func loadTransportOptions() (transportOptions, error) {
 	return transportOptions{transport: transport, port: port}, nil
 }
 
-func run(ctx context.Context, logger *slog.Logger, options transportOptions) error {
+func run(ctx context.Context, logger *slog.Logger, options transportOptions, dependencies server.Dependencies) error {
 	switch options.transport {
 	case stdioTransport:
-		return server.RunStdio(ctx)
+		return server.RunStdio(ctx, dependencies)
 	case httpTransport:
-		return server.RunHTTP(ctx, logger, options.port)
+		return server.RunHTTP(ctx, logger, options.port, dependencies)
 	default:
 		return fmt.Errorf("failed to run transport %q: unsupported value", options.transport)
 	}
