@@ -23,6 +23,21 @@ resource "google_cloud_run_v2_service" "app" {
         value = "http"
       }
 
+      env {
+        name  = "OAUTH_ISSUER_URL"
+        value = var.oauth_issuer_url
+      }
+
+      env {
+        name  = "OAUTH_JWKS_URL"
+        value = var.oauth_jwks_url
+      }
+
+      env {
+        name  = "OAUTH_RESOURCE_URL"
+        value = var.oauth_resource_url
+      }
+
       ports {
         container_port = 8080
       }

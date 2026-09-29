@@ -16,8 +16,11 @@ const (
 )
 
 // RunHTTP serves MCP messages over Streamable HTTP until the context is canceled or the HTTP server stops.
-func RunHTTP(ctx context.Context, logger *slog.Logger, port int, dependencies Dependencies) error {
-	httpServer := newHTTPServer(port, dependencies)
+func RunHTTP(ctx context.Context, logger *slog.Logger, port int, dependencies Dependencies, oauth OAuthConfig) error {
+	httpServer, err := newHTTPServer(port, dependencies, oauth)
+	if err != nil {
+		return err
+	}
 	defer func() { _ = httpServer.Close() }()
 
 	listener, err := net.Listen("tcp", httpServer.Addr)
@@ -35,12 +38,17 @@ func RunHTTP(ctx context.Context, logger *slog.Logger, port int, dependencies De
 	return serveHTTP(ctx, httpServer, listener)
 }
 
-func newHTTPServer(port int, dependencies Dependencies) *http.Server {
+func newHTTPServer(port int, dependencies Dependencies, oauth OAuthConfig) (*http.Server, error) {
+	handler, err := newRouter(dependencies, oauth)
+	if err != nil {
+		return nil, err
+	}
+
 	return &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
-		Handler:           newRouter(dependencies),
+		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
-	}
+	}, nil
 }
 
 func serveHTTP(ctx context.Context, httpServer *http.Server, listener net.Listener) error {

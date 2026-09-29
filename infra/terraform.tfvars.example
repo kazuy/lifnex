@@ -1,3 +1,7 @@
 project_id = "your-project-id"
 region     = "your-region"
 image_uri  = "your-image-uri"
+
+oauth_issuer_url   = "https://authorization-server.example"
+oauth_jwks_url     = "https://authorization-server.example/jwks"
+oauth_resource_url = "https://your-cloud-run-service-url/mcp"

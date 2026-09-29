@@ -2,9 +2,14 @@ module github.com/kazuy/lifnex/app
 
 go 1.27.1
 
-require github.com/modelcontextprotocol/go-sdk v1.8.0
+require (
+	github.com/MicahParks/keyfunc/v3 v3.8.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/modelcontextprotocol/go-sdk v1.8.0
+)
 
 require (
+	github.com/MicahParks/jwkset v0.11.3 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
