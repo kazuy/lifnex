@@ -22,7 +22,7 @@ resource "google_service_account" "github_actions_pr_checks" {
 resource "google_service_account_iam_member" "github_actions_pr_checks_identity" {
   service_account_id = google_service_account.github_actions_pr_checks.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.repository/${var.github_repository}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.repository_id/${var.github_repository_id}"
 }
 
 resource "google_project_iam_custom_role" "github_actions_pr_checks_state_reader" {

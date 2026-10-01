@@ -26,7 +26,7 @@ resource "google_service_account" "github_actions_deploy_infra" {
 resource "google_service_account_iam_member" "github_actions_deploy_infra_identity" {
   service_account_id = google_service_account.github_actions_deploy_infra.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/subject/repo:${var.github_repository}:environment:${var.github_infra_environment}"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/subject/${local.github_repository_subject}:environment:${var.github_infra_environment}"
 }
 
 resource "google_project_iam_member" "github_actions_deploy_infra" {
@@ -65,7 +65,7 @@ resource "google_service_account" "github_actions_deploy_app" {
 resource "google_service_account_iam_member" "github_actions_deploy_app_identity" {
   service_account_id = google_service_account.github_actions_deploy_app.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/subject/repo:${var.github_repository}:environment:${var.github_app_environment}"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/subject/${local.github_repository_subject}:environment:${var.github_app_environment}"
 }
 
 resource "google_project_iam_member" "github_actions_deploy_app_cloud_run" {

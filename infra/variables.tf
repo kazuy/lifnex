@@ -29,6 +29,28 @@ variable "github_repository" {
   }
 }
 
+variable "github_repository_owner_id" {
+  description = "Immutable GitHub owner ID used in OIDC subject claims."
+  type        = string
+  default     = "1894892"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_owner_id))
+    error_message = "github_repository_owner_id must contain only digits."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Immutable GitHub repository ID used in OIDC claims."
+  type        = string
+  default     = "1388333575"
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must contain only digits."
+  }
+}
+
 variable "github_infra_environment" {
   description = "Protected GitHub environment allowed to use the Terraform apply identity."
   type        = string
