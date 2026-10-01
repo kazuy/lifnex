@@ -9,13 +9,231 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_VERSION: "1.27.1"
+  TERRAFORM_VERSION: "1.16.4"
+
 concurrency:
   group: pr-checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  hello:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.changes.outputs.app }}
+      infra: ${{ steps.changes.outputs.infra }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected components
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/detect-changes.sh pr-checks "${EVENT_NAME}" "${BASE_SHA}" "${HEAD_SHA}"
+
+  go-format:
+    name: Go / Format
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Hello
-        run: echo "Hello from PR checks!"
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Check formatting
+        run: make go-format-check
+
+  go-vet:
+    name: Go / Vet
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: app/go.sum
+
+      - name: Run go vet
+        run: make go-vet
+
+  go-test:
+    name: Go / Test
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: app/go.sum
+
+      - name: Run tests
+        run: make go-test
+
+  go-build:
+    name: Go / Build
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: app/go.sum
+
+      - name: Build application
+        run: make go-build
+
+  terraform-format:
+    name: Terraform / Format
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Check formatting
+        run: terraform -chdir=infra fmt -check -diff
+
+  terraform-validate:
+    name: Terraform / Validate
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Initialize Terraform
+        run: terraform -chdir=infra init -backend=false -input=false
+
+      - name: Validate configuration
+        run: terraform -chdir=infra validate
+
+  terraform-plan:
+    name: Terraform / Plan
+    needs:
+      - changes
+      - terraform-format
+      - terraform-validate
+    if: |
+      always() &&
+      needs.changes.outputs.infra == 'true' &&
+      needs.terraform-format.result == 'success' &&
+      needs.terraform-validate.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ secrets.GCP_REGION }}
+      TF_VAR_bootstrap_image_uri: ${{ secrets.GCP_BOOTSTRAP_IMAGE_URI }}
+      TF_VAR_terraform_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_oauth_issuer_url: ${{ secrets.OAUTH_ISSUER_URL }}
+      TF_VAR_oauth_jwks_url: ${{ secrets.OAUTH_JWKS_URL }}
+      TF_VAR_oauth_resource_url: ${{ secrets.OAUTH_RESOURCE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PR_CHECKS_SERVICE_ACCOUNT }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Initialize Terraform
+        run: terraform -chdir=infra init -input=false -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Create Terraform plan
+        run: .github/scripts/terraform-plan.sh pr-checks.tfplan
+
+  pr-checks:
+    name: Verify results
+    if: always()
+    needs:
+      - changes
+      - go-format
+      - go-vet
+      - go-test
+      - go-build
+      - terraform-format
+      - terraform-validate
+      - terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify job results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          GO_FORMAT_RESULT: ${{ needs.go-format.result }}
+          GO_VET_RESULT: ${{ needs.go-vet.result }}
+          GO_TEST_RESULT: ${{ needs.go-test.result }}
+          GO_BUILD_RESULT: ${{ needs.go-build.result }}
+          TERRAFORM_FORMAT_RESULT: ${{ needs.terraform-format.result }}
+          TERRAFORM_VALIDATE_RESULT: ${{ needs.terraform-validate.result }}
+          TERRAFORM_PLAN_RESULT: ${{ needs.terraform-plan.result }}
+        shell: bash
+        run: |
+          for result in \
+            "${CHANGES_RESULT}" \
+            "${GO_FORMAT_RESULT}" \
+            "${GO_VET_RESULT}" \
+            "${GO_TEST_RESULT}" \
+            "${GO_BUILD_RESULT}" \
+            "${TERRAFORM_FORMAT_RESULT}" \
+            "${TERRAFORM_VALIDATE_RESULT}" \
+            "${TERRAFORM_PLAN_RESULT}"; do
+            if [[ "${result}" != "success" && "${result}" != "skipped" ]]; then
+              echo "A required job finished with result: ${result}"
+              exit 1
+            fi
+          done
