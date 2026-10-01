@@ -50,7 +50,14 @@ if [[ "${event_name}" != "workflow_dispatch" ]]; then
       infra/*)
         infra=true
         ;;
-      .github/scripts/* | .github/workflows/pr-checks.yml)
+      .github/scripts/detect-changes.sh | .github/workflows/deploy.yml)
+        app=true
+        infra=true
+        ;;
+      .github/scripts/terraform-plan.sh)
+        infra=true
+        ;;
+      .github/workflows/pr-checks.yml)
         if [[ "${mode}" == "pr-checks" ]]; then
           app=true
           infra=true
