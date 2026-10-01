@@ -52,6 +52,11 @@ resource "google_cloud_run_v2_service" "app" {
 
   lifecycle {
     ignore_changes = [
+      client,
+      client_version,
+      template[0].labels["commit-sha"],
+      template[0].labels["goog-terraform-provisioned"],
+      template[0].labels["managed-by"],
       template[0].containers[0].image,
     ]
   }
