@@ -9,13 +9,256 @@ on:
 permissions:
   contents: read
 
+env:
+  TERRAFORM_VERSION: "1.16.4"
+
 concurrency:
   group: production-deployment
   cancel-in-progress: false
 
 jobs:
-  hello:
+  changes:
+    name: Detect deployment targets
     runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.changes.outputs.app }}
+      infra: ${{ steps.changes.outputs.infra }}
+      sha: ${{ steps.changes.outputs.sha }}
     steps:
-      - name: Hello
-        run: echo "Hello from deployment!"
+      - name: Check out deployment revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "app=true" >> "${GITHUB_OUTPUT}"
+            echo "infra=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          app=false
+          infra=false
+
+          while IFS= read -r file; do
+            case "${file}" in
+              app/* | Makefile)
+                app=true
+                ;;
+              infra/*)
+                infra=true
+                ;;
+            esac
+          done < <(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+
+          echo "app=${app}" >> "${GITHUB_OUTPUT}"
+          echo "infra=${infra}" >> "${GITHUB_OUTPUT}"
+
+  terraform-plan:
+    name: Terraform / Plan
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ secrets.GCP_REGION }}
+      TF_VAR_bootstrap_image_uri: ${{ secrets.GCP_BOOTSTRAP_IMAGE_URI }}
+      TF_VAR_terraform_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_oauth_issuer_url: ${{ secrets.OAUTH_ISSUER_URL }}
+      TF_VAR_oauth_jwks_url: ${{ secrets.OAUTH_JWKS_URL }}
+      TF_VAR_oauth_resource_url: ${{ secrets.OAUTH_RESOURCE_URL }}
+    steps:
+      - name: Check out deployment revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PR_CHECKS_SERVICE_ACCOUNT }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Initialize Terraform
+        run: terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Create Terraform plan
+        id: plan
+        shell: bash
+        run: |
+          set +e
+          terraform -chdir=infra plan -lock=false -detailed-exitcode -out=preflight.tfplan -no-color
+          exit_code=$?
+          set -e
+
+          case "${exit_code}" in
+            0)
+              echo "has_changes=false" >> "${GITHUB_OUTPUT}"
+              ;;
+            2)
+              echo "has_changes=true" >> "${GITHUB_OUTPUT}"
+              ;;
+            *)
+              exit "${exit_code}"
+              ;;
+          esac
+
+      - name: Summarize Terraform plan
+        shell: bash
+        run: |
+          plan_json="$(terraform -chdir=infra show -json preflight.tfplan)"
+          add_count="$(jq '[.resource_changes[]? | select(.change.actions | index("create"))] | length' <<< "${plan_json}")"
+          change_count="$(jq '[.resource_changes[]? | select(.change.actions == ["update"])] | length' <<< "${plan_json}")"
+          destroy_count="$(jq '[.resource_changes[]? | select(.change.actions | index("delete"))] | length' <<< "${plan_json}")"
+
+          {
+            echo "## Terraform Plan"
+            echo
+            echo "| Action | Count |"
+            echo "| --- | ---: |"
+            echo "| Add | ${add_count} |"
+            echo "| Change | ${change_count} |"
+            echo "| Destroy | ${destroy_count} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  terraform-apply:
+    name: Terraform / Apply
+    needs:
+      - changes
+      - terraform-plan
+    if: needs.terraform-plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    environment: production-infra
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: ${{ secrets.GCP_REGION }}
+      TF_VAR_bootstrap_image_uri: ${{ secrets.GCP_BOOTSTRAP_IMAGE_URI }}
+      TF_VAR_terraform_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_oauth_issuer_url: ${{ secrets.OAUTH_ISSUER_URL }}
+      TF_VAR_oauth_jwks_url: ${{ secrets.OAUTH_JWKS_URL }}
+      TF_VAR_oauth_resource_url: ${{ secrets.OAUTH_RESOURCE_URL }}
+    steps:
+      - name: Check out deployment revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_INFRA_SERVICE_ACCOUNT }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Initialize Terraform
+        run: terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Create Terraform plan
+        run: terraform -chdir=infra plan -out=deploy.tfplan -no-color
+
+      - name: Apply Terraform plan
+        run: terraform -chdir=infra apply deploy.tfplan
+
+      - name: Summarize deployment
+        run: |
+          {
+            echo "## Terraform Apply"
+            echo
+            echo "Applied commit: \`${{ needs.changes.outputs.sha }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  app-deploy:
+    name: Application / Deploy
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production-app
+      url: ${{ steps.cloud_run.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out deployment revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.changes.outputs.sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_APP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker authentication
+        env:
+          REGISTRY_HOST: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker "${REGISTRY_HOST}" --quiet
+
+      - name: Build container image
+        env:
+          IMAGE_URI: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_PROJECT_ID }}-app/lifnex:${{ needs.changes.outputs.sha }}
+        run: make build-image IMAGE_URI="${IMAGE_URI}"
+
+      - name: Push container image
+        env:
+          IMAGE_URI: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_PROJECT_ID }}-app/lifnex:${{ needs.changes.outputs.sha }}
+        run: docker push "${IMAGE_URI}"
+
+      - name: Deploy Cloud Run revision
+        id: cloud_run
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          region: ${{ secrets.GCP_REGION }}
+          service: ${{ secrets.GCP_PROJECT_ID }}-app
+          image: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_PROJECT_ID }}-app/lifnex:${{ needs.changes.outputs.sha }}
+
+      - name: Verify deployment health
+        env:
+          SERVICE_URL: ${{ steps.cloud_run.outputs.url }}
+        run: curl --fail --retry 5 --retry-delay 5 "${SERVICE_URL}/healthz"
+
+      - name: Summarize deployment
+        run: |
+          {
+            echo "## Application Deployment"
+            echo
+            echo "Cloud Run revision deployed successfully."
+            echo
+            echo "Commit: \`${{ needs.changes.outputs.sha }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
