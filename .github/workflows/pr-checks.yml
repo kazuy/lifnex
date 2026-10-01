@@ -198,7 +198,7 @@ jobs:
         run: .github/scripts/terraform-plan.sh pr-checks.tfplan
 
   pr-checks:
-    name: PR Checks
+    name: Verify results
     if: always()
     needs:
       - changes
