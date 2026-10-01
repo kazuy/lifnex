@@ -191,10 +191,10 @@ jobs:
           service: ${{ secrets.GCP_PROJECT_ID }}-app
           image: ${{ env.IMAGE_URI }}
 
-      - name: Verify deployment health
+      - name: Verify deployment endpoint
         env:
           SERVICE_URL: ${{ steps.cloud_run.outputs.url }}
-        run: curl --fail --retry 5 --retry-delay 5 "${SERVICE_URL}/healthz"
+        run: curl --fail --retry 5 --retry-delay 5 "${SERVICE_URL}/.well-known/oauth-protected-resource"
 
       - name: Summarize deployment
         run: |
