@@ -16,7 +16,7 @@ resource "google_cloud_run_v2_service" "app" {
     }
 
     containers {
-      image = var.image_uri
+      image = var.bootstrap_image_uri
 
       env {
         name  = "TRANSPORT"

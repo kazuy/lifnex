@@ -1,6 +1,7 @@
-project_id = "your-project-id"
-region     = "your-region"
-image_uri  = "your-image-uri"
+project_id             = "your-project-id"
+region                 = "your-region"
+bootstrap_image_uri    = "your-bootstrap-image-uri"
+terraform_state_bucket = "your-terraform-state-bucket"
 
 oauth_issuer_url   = "https://authorization-server.example"
 oauth_jwks_url     = "https://authorization-server.example/jwks"
