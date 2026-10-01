@@ -77,6 +77,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Initialize Terraform
         run: terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}"
@@ -124,6 +125,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Initialize Terraform
         run: terraform -chdir=infra init -backend-config="bucket=${TF_STATE_BUCKET}"

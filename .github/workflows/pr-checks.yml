@@ -124,6 +124,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Check formatting
         run: terraform -chdir=infra fmt -check -diff
@@ -141,6 +142,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Initialize Terraform
         run: terraform -chdir=infra init -backend=false -input=false
@@ -190,6 +192,7 @@ jobs:
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Initialize Terraform
         run: terraform -chdir=infra init -input=false -backend-config="bucket=${TF_STATE_BUCKET}"
