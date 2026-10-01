@@ -22,7 +22,13 @@ declared in `mise.toml`, then authenticate locally:
 mise trust
 mise install
 gcloud auth application-default login
+gcloud services enable cloudresourcemanager.googleapis.com \
+  --project=<PROJECT_ID>
 ```
+
+Cloud Resource Manager must be enabled before the first Terraform plan because
+the Google provider uses it to read project services. Terraform manages the API
+after this initial bootstrap step.
 
 ## Initial provisioning
 
